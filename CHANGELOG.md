@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.0] - 2026-11-16
+
+### Features
+- 将用户提供的 CameraSDK 2.2.4 Linux x86_64 完整发行目录纳入 `third_party/CameraSDK-2.2.4-linux-x86_64`，默认从仓库内查找头文件、动态库与相机能力表。
+- 保留 `CAMERASDK_ROOT` 外部覆盖；重新配置时同步刷新 SDK 头文件/库缓存及构建目录的 `jsons` 链接。
+- 更新 README、commands.md 和 SDK 来源说明，提供克隆仓库、安装系统依赖、默认构建、离线检查及运行流程。
+
+### Design Rationale
+- 将固定版本 SDK 与客户端一同发布，减少用户单独获取 SDK 和手工配置路径的步骤；继续使用系统 OpenCV、FFmpeg 和 yaml-cpp。
+- 原样保留 SDK 的 29 个发行文件，单独记录来源；SPS helper 的 MIT 归属与许可保持独立。
+
+### Notes & Caveats
+- 构建流程面向 Ubuntu 24.04 x86_64，不包含 MediaSDK 或 ARM 包；运行需保留所选 SDK、能力表链接及目标系统动态库，不提供跨平台或单文件全静态二进制。
+- 本轮验证范围为本机构建、六组离线回归与干净克隆构建检查；不启动相机或新增实机采集。
+- 仅调整依赖打包与查找，CLI、当前 YAML 参数值、双镜头 ALL、30 fps 限制和采集数据合同保持不变。
+
 ## [0.5.2] - 2026-11-16
 
 ### Features

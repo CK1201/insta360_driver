@@ -14,6 +14,8 @@
 *.a
 *.so
 *.so.*
+# The bundled vendor runtime is an intentional source dependency.
+!/third_party/CameraSDK-2.2.4-linux-x86_64/lib/libCameraSDK.so
 *.log
 *.pid
 core

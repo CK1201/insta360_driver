@@ -12,9 +12,9 @@ Linux 上的 Insta360 X5 C++17 客户端，通过 USB 获取原始双鱼眼视�
 - X5 完整 I/P-only H.264 包使用低延迟直解路径，只在预览副本中修正 SPS；通用字节流、分片 H.264 和 H.265 保留 FFmpeg parser 路径。预览从可初始化关键帧开始，前置旧帧仍原样保存。
 - 视频/IMU/曝光回调进入 64 MiB 队列，工作线程保存并解码，主线程显示最新画面，独立线程查询状态。正常退出会排空已接受数据；解码失败后仍在存储可写时保存已接受数据，运行标记为失败。
 
-依赖 CMake、C++17 编译器、yaml-cpp、OpenCV、FFmpeg 开发库、Python 3（离线测试）以及外部 Insta360 CameraSDK。使用 CPU 解码，无需 MediaSDK 或 GPU。
+仓库已内置 [CameraSDK 2.2.4 Linux x86_64](third_party/CameraSDK-2.2.4-linux-x86_64/README.md)，克隆后安装系统依赖即可按 [commands.md](commands.md) 构建和运行，无需另行下载 SDK。系统依赖为 CMake、C++17 编译器、yaml-cpp、OpenCV、FFmpeg 开发库及 Python 3（离线测试）；使用 CPU 解码，无需 MediaSDK 或 GPU。
 
-既往实测环境为 Ubuntu 24.04.5 x86_64、GCC 13、CameraSDK 2.2.4、yaml-cpp 0.8、FFmpeg 6、OpenCV 4.6，X5 固件为 v1.13.21。CameraSDK 官方标称环境为 Ubuntu 22.04；其他 SDK、系统或固件组合需自行验证。
+构建流程面向 Ubuntu 24.04 x86_64。既往实测环境为 Ubuntu 24.04.5 x86_64、GCC 13、CameraSDK 2.2.4、yaml-cpp 0.8、FFmpeg 6、OpenCV 4.6，X5 固件为 v1.13.21。CameraSDK 官方标称环境为 Ubuntu 22.04；其他 SDK、系统或固件组合需自行验证。本仓库不提供 ARM、Windows 或 macOS 的构建包。
 
 ## 模块结构
 
@@ -27,6 +27,7 @@ Linux 上的 Insta360 X5 C++17 客户端，通过 USB 获取原始双鱼眼视�
 | `src/decoder.cpp` / `include/x5/decoder.hpp` | H.264/H.265 解码及低延迟路径 |
 | `src/preview.cpp` / `include/x5/preview.hpp` | 预览面板合成 |
 | [config](config/x5.yaml) / [tests](tests) | 配置示例与六组离线回归 |
+| [third_party/CameraSDK-2.2.4-linux-x86_64](third_party/CameraSDK-2.2.4-linux-x86_64/README.md) | 内置 CameraSDK 动态库、头文件、能力表和原始示例 |
 | [third_party/insta360_driver](third_party/insta360_driver/README.md) | SPS helper 来源与 MIT 许可 |
 
 ## 配置合同
@@ -76,12 +77,14 @@ Linux 上的 Insta360 X5 C++17 客户端，通过 USB 获取原始双鱼眼视�
 
 六组离线回归为 `config`、`capture`、`cli`、`preview`、`low_latency`、`geometry`，覆盖配置/路径/模式、CLI、本地文件、真实编码流解码、色彩、原样保存、包索引、多路隔离、队列与退出排空、解码/写盘故障、低延迟及持续尺寸检查。它们不连接相机。
 
-既往在上述本机环境实测三档原生尺寸、约 30 fps 视频和约 500 Hz IMU，以及手动参数读回、预览、后台保存和正常退出。v0.5.2 本轮仅做构建与离线验证，没有新增实机采集。
+既往在上述本机环境实测三档原生尺寸、约 30 fps 视频和约 500 Hz IMU，以及手动参数读回、预览、后台保存和正常退出。v0.6.0 的验证范围为本机与干净克隆中的构建和离线检查，没有新增实机采集。
 
 本项目面向单台 X5 USB 原始采集，不提供机内 SD 卡录像、全景拼接、FlowState、自动重连、网络服务、ROS 或 YAML 热更新。双鱼眼数据用于 VIO/SLAM 前仍需相机与 camera–IMU 标定；已有 SDK 标定字段和时间戳不等于完成同步精度验收。
 
-## 外部 SDK 与第三方归属
+## 内置 SDK 与第三方归属
 
-CameraSDK 需自行向 Insta360 申请，按其许可使用，并通过 `CAMERASDK_ROOT` 指向仓库外的 SDK 目录。构建目录的 `jsons` 软链接复用 SDK 配套能力表，运行时需保留外部 SDK 及此链接。SDK 文件不随本仓库发布。参考 [官方 CameraSDK 文档](https://insta360develop.github.io/Insta360-Developer_Docs/ch/x/desktop/camera/)。
+CMake 默认使用仓库内的 `third_party/CameraSDK-2.2.4-linux-x86_64`，也支持通过 `CAMERASDK_ROOT` 显式选择外部 SDK，操作见 [commands.md](commands.md)。构建目录的 `jsons` 软链接指向所选 SDK 的配套能力表；运行时需保留该 SDK 的动态库、能力表及此链接。程序同时依赖目标系统的 OpenCV、FFmpeg、yaml-cpp 等动态库，构建结果不是可随意复制到其他系统的单文件静态程序。
+
+CameraSDK 来自用户提供的 Insta360 2.2.4 Linux x86_64 发行包，原始文件保持不变，其许可不由本项目重新授予。来源和目录说明见 [SDK 说明](third_party/CameraSDK-2.2.4-linux-x86_64/README.md)，接口参考 [官方 CameraSDK 文档](https://insta360develop.github.io/Insta360-Developer_Docs/ch/x/desktop/camera/)。
 
 H.264 SPS helper 派生自固定版本的 specialist-ai/insta360_driver，Copyright (c) 2026 Hybrid Robotics，按 MIT 许可保留归属和原文，见 [第三方说明](third_party/insta360_driver/README.md) 与 [MIT 许可](third_party/insta360_driver/LICENSE)。

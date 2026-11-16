@@ -1,13 +1,19 @@
 cmake_minimum_required(VERSION 3.16)
-project(insta360_x5_client VERSION 0.5.2 LANGUAGES CXX)
+project(insta360_x5_client VERSION 0.6.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(CAMERASDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../Linux_CameraSDK-2.2.4_MediaSDK-3.2.0/CameraSDK-2.2.4-20261104_140905-linux-x86_64"
+set(CAMERASDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/CameraSDK-2.2.4-linux-x86_64"
     CACHE PATH "CameraSDK directory containing include/ and lib/libCameraSDK.so")
+# Refresh derived paths when an existing build switches between SDK locations.
+unset(CAMERASDK_INCLUDE_DIR CACHE)
+unset(CAMERASDK_LIBRARY CACHE)
 find_path(CAMERASDK_INCLUDE_DIR camera/camera.h PATHS "${CAMERASDK_ROOT}/include" NO_DEFAULT_PATH REQUIRED)
 find_library(CAMERASDK_LIBRARY CameraSDK PATHS "${CAMERASDK_ROOT}/lib" NO_DEFAULT_PATH REQUIRED)
+if(NOT EXISTS "${CAMERASDK_ROOT}/bin/jsons/camera_conf_Insta360_X5.json")
+    message(FATAL_ERROR "CAMERASDK_ROOT is missing bin/jsons/camera_conf_Insta360_X5.json")
+endif()
 add_library(CameraSDK SHARED IMPORTED)
 set_target_properties(CameraSDK PROPERTIES IMPORTED_LOCATION "${CAMERASDK_LIBRARY}"
     INTERFACE_INCLUDE_DIRECTORIES "${CAMERASDK_INCLUDE_DIR}")
@@ -32,11 +38,9 @@ add_executable(insta360_x5_client src/main.cpp src/camera.cpp)
 target_link_libraries(insta360_x5_client PRIVATE x5_preview CameraSDK opencv_highgui Threads::Threads)
 target_compile_definitions(insta360_x5_client PRIVATE X5_VERSION="${PROJECT_VERSION}")
 set_target_properties(insta360_x5_client PROPERTIES BUILD_RPATH "${CAMERASDK_ROOT}/lib")
-# The SDK loads its capability JSONs next to the executable. Reuse the delivery
-# directory without copying vendor data into this project.
-if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/jsons")
-    file(CREATE_LINK "${CAMERASDK_ROOT}/bin/jsons" "${CMAKE_CURRENT_BINARY_DIR}/jsons" SYMBOLIC)
-endif()
+# The SDK loads capability JSONs next to the executable. CREATE_LINK replaces
+# an existing link so SDK overrides update headers, library and JSONs together.
+file(CREATE_LINK "${CAMERASDK_ROOT}/bin/jsons" "${CMAKE_CURRENT_BINARY_DIR}/jsons" SYMBOLIC)
 foreach(target x5_config x5_capture x5_preview insta360_x5_client)
     target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
 endforeach()

@@ -1,30 +1,26 @@
 # 构建、运行与检查
 
-除首次安装和克隆外，以下命令从仓库根目录执行。配置合同、数据格式和时钟/标定限制见 [README.md](README.md)。本轮 v0.5.2 发布仅做构建与离线验证；第 3–6 节供用户需要实机采集时操作。
+除首次克隆外，以下命令从仓库根目录执行。配置合同、数据格式和时钟/标定限制见 [README.md](README.md)。v0.6.0 的验证范围为本机与干净克隆中的构建和离线检查；第 3–6 节供用户需要实机采集时操作，本轮未启动相机。
 
 ## 1. 获取源码与依赖
 
-Ubuntu 24.04 x86_64：
+Ubuntu 24.04 x86_64，先用 Git 克隆源码，再安装系统依赖。以下假设已安装 Git；未安装时先运行 `sudo apt update && sudo apt install -y git`：
 
 ```bash
+git clone https://github.com/CK1201/insta360_driver.git
+cd insta360_driver
 sudo apt update
 sudo apt install -y build-essential cmake pkg-config git python3 \
   libyaml-cpp-dev libopencv-dev libavcodec-dev libavutil-dev libswscale-dev \
   ffmpeg usbutils
-git clone https://github.com/CK1201/insta360_driver.git
-cd insta360_driver
 ```
 
-向 Insta360 申请 Linux x86_64 CameraSDK，在仓库外解压。将下列通用绝对路径替换为 SDK 根目录；其中应包含 `include/camera/camera.h`、`lib/libCameraSDK.so` 和 `bin/jsons`。既往本机使用 CameraSDK 2.2.4；无需安装 MediaSDK。
-
-```bash
-camera_sdk_root=/absolute/path/to/CameraSDK-2.2.4-linux-x86_64
-```
+仓库内已包含 `third_party/CameraSDK-2.2.4-linux-x86_64`，默认构建直接使用它，无需另行申请、下载或解压 SDK，也无需 MediaSDK。SDK 来源与平台范围见 [SDK 说明](third_party/CameraSDK-2.2.4-linux-x86_64/README.md)。
 
 ## 2. 构建与离线检查
 
 ```bash
-cmake -S . -B build -DCAMERASDK_ROOT="$camera_sdk_root"
+cmake -S . -B build
 cmake --build build -j4
 ctest --test-dir build --output-on-failure
 ./build/insta360_x5_client --help
@@ -34,7 +30,7 @@ readlink -f build/jsons
 
 CTest 应列出六项：`config`、`capture`、`cli`、`preview`、`low_latency`、`geometry`。测试使用合成编码流和本地文件，不连接相机；FFmpeg 需提供 `libx264`、`libx265` 编码器。`--check-config` 不访问 USB、不创建采集目录。
 
-CMake 将 `build/jsons` 链接到外部 SDK 的 `bin/jsons`，并为客户端设置 SDK 库路径。运行时保留构建目录和 SDK，勿只复制可执行文件。更换 SDK 时使用新的构建目录并指定 `CAMERASDK_ROOT`，再检查该目录内 `jsons` 的链接目标，避免沿用旧 SDK 的缓存路径和链接。
+CMake 默认将 `build/jsons` 链接到仓库内 SDK 的 `bin/jsons`，并为客户端设置该 SDK 的动态库路径。运行时保留构建目录、所选 SDK 及其 `jsons` 链接。可执行文件还依赖系统的 OpenCV、FFmpeg、yaml-cpp 等动态库；这些步骤不生成跨平台或单文件全静态程序，不能只复制可执行文件到任意机器运行。外部 SDK 覆盖及旧构建目录的切换见第 7 节。
 
 ## 3. 连接 X5 与 USB 权限
 
@@ -126,10 +122,33 @@ ffmpeg -v error -i "$video_file" -f null -
 
 既往 Ubuntu 24.04 / CameraSDK 2.2.4 / X5 v1.13.21 曾实测约 30 fps 视频与约 500 Hz IMU，本轮离线验证不构成新的实机验收。启动码流可能含缺少初始化头的旧 P 帧，外部解码器可能报告 PPS 警告；原始文件不裁剪，预览跳过数量记在 `startup_units_not_decoded`。其他解码错误仍需核查。
 
-## 7. 常见问题
+## 7. 可选：使用外部 CameraSDK
+
+仅在需要替换内置 SDK 时使用此流程。将路径改为 Linux x86_64 CameraSDK 根目录；该目录必须包含 `include/camera/camera.h`、`lib/libCameraSDK.so` 和 `bin/jsons/camera_conf_Insta360_X5.json`：
+
+```bash
+camera_sdk_root=/absolute/path/to/CameraSDK-2.2.4-linux-x86_64
+cmake -S . -B build -DCAMERASDK_ROOT="$camera_sdk_root"
+cmake --build build -j4
+ctest --test-dir build --output-on-failure
+readlink -f build/jsons
+```
+
+重新配置会按所选根目录刷新 SDK 头文件、动态库及 `build/jsons` 链接。旧构建目录可能缓存了外部 `CAMERASDK_ROOT`；要恢复仓库内 SDK，清除该缓存项并重新构建：
+
+```bash
+cmake -S . -B build -U CAMERASDK_ROOT
+cmake --build build -j4
+ctest --test-dir build --output-on-failure
+readlink -f build/jsons
+```
+
+恢复后链接目标应为当前仓库的 `third_party/CameraSDK-2.2.4-linux-x86_64/bin/jsons`。外部 SDK、系统或固件组合的实际相机行为需自行验证。
+
+## 8. 常见问题
 
 - **找不到相机或权限不足**：检查数据线、Android 模式、USB 节点读写权限和 `camera.serial`；`lsusb` 可见不代表 SDK 有访问权限。
-- **SDK 库或能力表缺失**：确认 `CAMERASDK_ROOT` 的三个目录完整、`build/jsons` 指向该 SDK 的 `bin/jsons`；重新配置后再构建。
+- **SDK 库或能力表缺失**：默认检查仓库内 SDK 是否完整；使用外部 SDK 时检查第 7 节列出的文件。确认 `build/jsons` 指向所选 SDK 的 `bin/jsons`，重新配置后再构建。
 - **参数拒绝或读回不一致**：检查 YAML、相机当前状态及固件能力，不绕过读回检查；正式客户端固定 30 fps，不运行额外 FPS 探测。
 - **没有桌面显示环境**：将 `preview.enabled` 设为 false；删除显示环境变量不会自动关闭预览。
 - **无视频/IMU、尺寸偏离、队列/写盘/解码失败**：检查终端错误和 `summary.yaml`；保留已有数据，该次运行按失败处理。客户端不会自动重连。
