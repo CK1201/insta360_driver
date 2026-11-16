@@ -1,0 +1,28 @@
+/build*/
+/outputs/
+/test-artifacts/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/CTestTestfile.cmake
+/Makefile
+/Testing/
+/compile_commands.json
+
+# Generated binaries, libraries, logs and process state.
+*.o
+*.a
+*.so
+*.so.*
+*.log
+*.pid
+core
+core.*
+
+# Python/editor caches.
+__pycache__/
+*.py[cod]
+.cache/
+*.swp
+*.swo
+*~

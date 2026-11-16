@@ -1,0 +1,67 @@
+cmake_minimum_required(VERSION 3.16)
+project(insta360_x5_client VERSION 0.5.2 LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+set(CAMERASDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../Linux_CameraSDK-2.2.4_MediaSDK-3.2.0/CameraSDK-2.2.4-20261104_140905-linux-x86_64"
+    CACHE PATH "CameraSDK directory containing include/ and lib/libCameraSDK.so")
+find_path(CAMERASDK_INCLUDE_DIR camera/camera.h PATHS "${CAMERASDK_ROOT}/include" NO_DEFAULT_PATH REQUIRED)
+find_library(CAMERASDK_LIBRARY CameraSDK PATHS "${CAMERASDK_ROOT}/lib" NO_DEFAULT_PATH REQUIRED)
+add_library(CameraSDK SHARED IMPORTED)
+set_target_properties(CameraSDK PROPERTIES IMPORTED_LOCATION "${CAMERASDK_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${CAMERASDK_INCLUDE_DIR}")
+find_package(yaml-cpp REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc imgcodecs)
+find_package(Threads REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavcodec libavutil libswscale)
+
+add_library(x5_config src/config.cpp)
+target_include_directories(x5_config PUBLIC include)
+# Only enum constants are used; offline configuration checks do not call the SDK.
+target_include_directories(x5_config PRIVATE "${CAMERASDK_INCLUDE_DIR}")
+target_link_libraries(x5_config PUBLIC yaml-cpp::yaml-cpp)
+add_library(x5_capture src/capture.cpp src/decoder.cpp)
+target_include_directories(x5_capture PUBLIC include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(x5_capture PUBLIC opencv_core PRIVATE PkgConfig::FFMPEG Threads::Threads)
+add_library(x5_preview src/preview.cpp)
+target_include_directories(x5_preview PUBLIC include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(x5_preview PUBLIC x5_config x5_capture opencv_imgproc)
+add_executable(insta360_x5_client src/main.cpp src/camera.cpp)
+target_link_libraries(insta360_x5_client PRIVATE x5_preview CameraSDK opencv_highgui Threads::Threads)
+target_compile_definitions(insta360_x5_client PRIVATE X5_VERSION="${PROJECT_VERSION}")
+set_target_properties(insta360_x5_client PROPERTIES BUILD_RPATH "${CAMERASDK_ROOT}/lib")
+# The SDK loads its capability JSONs next to the executable. Reuse the delivery
+# directory without copying vendor data into this project.
+if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/jsons")
+    file(CREATE_LINK "${CAMERASDK_ROOT}/bin/jsons" "${CMAKE_CURRENT_BINARY_DIR}/jsons" SYMBOLIC)
+endif()
+foreach(target x5_config x5_capture x5_preview insta360_x5_client)
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+endforeach()
+
+include(CTest)
+if(BUILD_TESTING)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_executable(x5_config_tests tests/test_config.cpp)
+    target_link_libraries(x5_config_tests PRIVATE x5_config)
+    add_test(NAME config COMMAND x5_config_tests)
+    add_executable(x5_capture_tests tests/test_capture.cpp)
+    target_link_libraries(x5_capture_tests PRIVATE x5_capture)
+    add_test(NAME capture COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_capture_tests.py"
+        "$<TARGET_FILE:x5_capture_tests>" "${CMAKE_CURRENT_BINARY_DIR}/test-artifacts")
+    add_test(NAME cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_cli.py"
+        "$<TARGET_FILE:insta360_x5_client>" "${CMAKE_CURRENT_SOURCE_DIR}/config/x5.yaml")
+    add_executable(x5_preview_smoke tests/preview_smoke.cpp)
+    target_link_libraries(x5_preview_smoke PRIVATE x5_preview opencv_imgcodecs)
+    add_test(NAME preview COMMAND x5_preview_smoke "${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/preview")
+    add_executable(x5_low_latency_tests tests/test_low_latency.cpp)
+    target_link_libraries(x5_low_latency_tests PRIVATE x5_capture PkgConfig::FFMPEG)
+    add_test(NAME low_latency COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_low_latency_tests.py"
+        "$<TARGET_FILE:x5_low_latency_tests>" "${CMAKE_CURRENT_BINARY_DIR}/test-artifacts")
+    add_executable(x5_geometry_tests tests/test_geometry.cpp)
+    target_link_libraries(x5_geometry_tests PRIVATE x5_capture)
+    add_test(NAME geometry COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_geometry_tests.py"
+        "$<TARGET_FILE:x5_geometry_tests>" "${CMAKE_CURRENT_BINARY_DIR}/test-artifacts")
+endif()

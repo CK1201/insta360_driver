@@ -1,0 +1,37 @@
+# 启动时读取并校验、读回；更改后需重启。配置合同见 README.md，操作见 commands.md。
+camera:
+  # 留空：仅在恰好连接一台 X5 时自动选择；否则填写设备序列号。
+  serial: ""
+  exposure:
+    # auto/full_auto: ISO 与快门为空；manual: 两项必填；两种 priority: 只填对应项。
+    mode: manual
+    # ISO/快门支持值在启动时按设备能力核对。
+    iso: 200
+    # 快门不得长于 1/fps 秒。
+    shutter_s: 0.01
+    # 仅 auto/full_auto 支持非零 EV；范围 [-4,4]，步长 0.05（SDK 使用 EV×20）。
+    ev: 0
+  # 0 为自动白平衡；手动范围 2000..10000 K，具体步长由设备能力决定。
+  white_balance_kelvin: 4600
+
+stream:
+  # 两个镜头各自的原生边长，仅支持 960/1280/1920；合并为 2×边长 × 边长。
+  resolution: 960
+  # 当前只允许 30fps，其他帧率会在访问相机前报错。
+  fps: 30
+  bitrate_bps: 8000000
+  imu: true
+
+preview:
+  # 双鱼眼预览；不进行拼接或 FlowState 稳定。
+  enabled: true
+
+output:
+  save: false
+  # 相对于本 YAML 文件所在目录；每次运行创建独立子目录。
+  directory: ../outputs
+
+runtime:
+  # 0 为持续运行，直到 q、关闭预览窗口或 Ctrl+C。
+  duration_s: 0
+  status_interval_s: 1
