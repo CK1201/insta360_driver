@@ -1,155 +1,58 @@
-# 构建、运行与检查
+# 构建与运行入口
 
-除首次克隆外，以下命令从仓库根目录执行。配置合同、数据格式和时钟/标定限制见 [README.md](README.md)。v0.6.0 的验证范围为本机与干净克隆中的构建和离线检查；第 3–6 节供用户需要实机采集时操作，本轮未启动相机。
+以下命令从 `insta360_driver` 仓库根目录执行。依赖安装、USB 权限及 Android 手机准备分别见 [X5 操作手册](x5/commands.md)、[GO 3S 操作手册](go3s/commands.md)。
 
-## 1. 获取源码与依赖
-
-Ubuntu 24.04 x86_64，先用 Git 克隆源码，再安装系统依赖。以下假设已安装 Git；未安装时先运行 `sudo apt update && sudo apt install -y git`：
+## X5
 
 ```bash
-git clone https://github.com/CK1201/insta360_driver.git
-cd insta360_driver
-sudo apt update
-sudo apt install -y build-essential cmake pkg-config git python3 \
-  libyaml-cpp-dev libopencv-dev libavcodec-dev libavutil-dev libswscale-dev \
-  ffmpeg usbutils
+cmake -S x5 -B x5/build
+cmake --build x5/build -j4
+ctest --test-dir x5/build --output-on-failure
+./x5/build/insta360_x5_client --config x5/config/x5.yaml --check-config
+./x5/build/insta360_x5_client --config x5/config/x5.yaml
 ```
 
-仓库内已包含 `third_party/CameraSDK-2.2.4-linux-x86_64`，默认构建直接使用它，无需另行申请、下载或解压 SDK，也无需 MediaSDK。SDK 来源与平台范围见 [SDK 说明](third_party/CameraSDK-2.2.4-linux-x86_64/README.md)。
+也可以先进入 `x5/`，沿用 `./build/insta360_x5_client --config config/x5.yaml`。输出目录仍相对于 YAML 文件解析，默认保存到 `x5/outputs`。
 
-## 2. 构建与离线检查
+## GO 3S
+
+先让手机连接 GO 3S 热点并启动桥接 App：
 
 ```bash
-cmake -S . -B build
-cmake --build build -j4
-ctest --test-dir build --output-on-failure
-./build/insta360_x5_client --help
-./build/insta360_x5_client --config config/x5.yaml --check-config
-readlink -f build/jsons
+cmake -S go3s -B go3s/build
+cmake --build go3s/build -j4
+ctest --test-dir go3s/build --output-on-failure
+./go3s/build/insta360_go3s_client --config go3s/config/go3s.yaml --check-config
+./go3s/build/insta360_go3s_client --config go3s/config/go3s.yaml
 ```
 
-CTest 应列出六项：`config`、`capture`、`cli`、`preview`、`low_latency`、`geometry`。测试使用合成编码流和本地文件，不连接相机；FFmpeg 需提供 `libx264`、`libx265` 编码器。`--check-config` 不访问 USB、不创建采集目录。
+进入 `go3s/` 后也可沿用该项目原命令；保存默认位于 `go3s/outputs`。电脑退出只结束本次采集，手机继续保持相机控制连接。
 
-CMake 默认将 `build/jsons` 链接到仓库内 SDK 的 `bin/jsons`，并为客户端设置该 SDK 的动态库路径。运行时保留构建目录、所选 SDK 及其 `jsons` 链接。可执行文件还依赖系统的 OpenCV、FFmpeg、yaml-cpp 等动态库；这些步骤不生成跨平台或单文件全静态程序，不能只复制可执行文件到任意机器运行。外部 SDK 覆盖及旧构建目录的切换见第 7 节。
-
-## 3. 连接 X5 与 USB 权限
-
-相机开机，用支持数据传输的 USB 线连接电脑，在相机屏幕选择 **Android 模式**，确认设备：
+若需重新准备 Android SDK，显式指定用户持有的 ZIP，相关凭据不进入 Git：
 
 ```bash
-lsusb -d 2e1a:0002
+cd go3s
+python3 scripts/setup_android.py --sdk-zip /absolute/path/to/Android-SDK-2.2.6.zip
+scripts/build_android.sh
 ```
 
-普通用户需对设备有读写权限。以下规则只匹配 X5 的 `2e1a:0002`；安装规则和加入用户组需要管理员权限，程序不会自行安装。若已配置，可跳过：
+## 共同 Python 环境
+
+以下命令从仓库根目录执行，新建环境前先按两份型号手册准备系统依赖：
 
 ```bash
-sudo groupadd -f plugdev
-sudo usermod -aG plugdev "$USER"
-sudo tee /etc/udev/rules.d/99-insta360-x5.rules >/dev/null <<'EOF'
-SUBSYSTEM=="usb", ATTR{idVendor}=="2e1a", ATTR{idProduct}=="0002", GROUP="plugdev", MODE="0660"
-EOF
-sudo udevadm control --reload-rules
-sudo udevadm trigger --action=change --subsystem-match=usb --attr-match=idVendor=2e1a --attr-match=idProduct=0002
+python3 -m venv .venv
+.venv/bin/python -m pip install ./x5 ./go3s
+.venv/bin/python x5/examples/read_frames.py --config x5/config/x5.yaml
+.venv/bin/python go3s/examples/read_frames.py --config go3s/config/go3s.yaml
 ```
 
-首次加入 `plugdev` 后注销并重新登录，再重插相机并选择 Android 模式。可用 `id -nG` 确认组成员身份；根据 `lsusb` 显示的 Bus/Device 检查对应 `/dev/bus/usb/BBB/DDD` 节点应属于 `root:plugdev` 且组可读写。配置后用普通用户启动客户端。
+两条取帧命令分别使用相应相机，正常退出后再运行下一条。不要同时用 CLI 和 Python 独占同一相机。
 
-## 4. 预览与定时采集
-
-[config/x5.yaml](config/x5.yaml) 当前为手动 ISO 200、0.01 秒、4600 K、每镜头 960、30 fps，预览开启、保存关闭。按需编辑后先运行第 2 节的配置检查，再使用原启动命令：
+本机迁入的 `.venv-python312` 也可继续使用，两个包已从新目录重新安装：
 
 ```bash
-./build/insta360_x5_client --config config/x5.yaml
+.venv-python312/bin/python -c 'import insta360_x5, insta360_go3s; print(insta360_x5.__version__, insta360_go3s.__version__)'
+.venv-python312/bin/python x5/examples/read_frames.py --config x5/config/x5.yaml
+.venv-python312/bin/python go3s/examples/read_frames.py --config go3s/config/go3s.yaml
 ```
-
-只接受每镜头 `resolution: 960`、`1280` 或 `1920`，两个镜头始终保留，`fps` 必须为 30。合并尺寸依次为 1920×960、2560×1280、3840×1920。程序会读回原生尺寸/FPS、曝光与白平衡，并检查实际帧尺寸；拒绝不支持值，不自动降级。
-
-定时运行使用 `--duration`，覆盖 YAML 中的秒数；0 表示持续运行：
-
-```bash
-./build/insta360_x5_client --config config/x5.yaml --duration 10
-```
-
-开启 `output.save` 后，程序打印完整保存目录。`output.directory` 相对于 YAML 所在目录解析；当前 `config/x5.yaml` 的 `../outputs` 对应仓库根目录的 `outputs`，每次保存使用新的时间子目录。修改配置后需重启程序。
-
-按 q/Esc、关闭预览窗口或 Ctrl+C 正常退出，等待结束摘要与文件写完。参数设置可能保留在相机中，退出不会恢复旧曝光。运行期间避免其他程序同时控制相机。
-
-## 5. 后台保存
-
-保留原示例，复制一份采集配置：
-
-```bash
-cp config/x5.yaml config/x5_record.yaml
-```
-
-在 `config/x5_record.yaml` 中把 `preview.enabled` 改为 false、`output.save` 改为 true，其余值按采集要求填写并保持 `fps: 30`。无桌面环境必须明确关闭预览。以下示例后台保存 60 秒：
-
-```bash
-./build/insta360_x5_client --config config/x5_record.yaml --check-config
-nohup ./build/insta360_x5_client --config config/x5_record.yaml --duration 60 >x5_capture.log 2>&1 &
-echo "$!" > x5_capture.pid
-```
-
-查看进度和本次目录：
-
-```bash
-tail -f x5_capture.log
-```
-
-`tail` 的 Ctrl+C 只停止日志查看。需要提前结束仍在运行的本次采集时，向保存的进程号发送正常退出信号，再查看日志中的结束摘要：
-
-```bash
-kill -INT "$(cat x5_capture.pid)"
-```
-
-不要强制终止进程，以免来不及排空队列和写入摘要。
-
-## 6. 检查保存文件
-
-将 `capture_dir` 替换为程序打印的实际目录，`video_file` 按实际流编号与 `.h264` / `.h265` 扩展名填写：
-
-```bash
-capture_dir=/absolute/path/to/insta360_driver/outputs/实际采集子目录
-video_file="$capture_dir/video_stream_0.h264"
-cat "$capture_dir/summary.yaml"
-ffprobe -v error -select_streams v:0 \
-  -show_entries stream=codec_name,width,height,r_frame_rate \
-  -of default=noprint_wrappers=1 "$video_file"
-ffmpeg -v error -i "$video_file" -f null -
-```
-
-检查退出码、`capture_valid`、实际尺寸、可解码帧、已启用的 IMU 样本及曝光回调。曝光缺失会单独告警，不能记为全部传感器通过。码流标称帧率不等于实际接收帧率；用 `video_packets.csv`、`imu.csv` 和主机接收速率分析时序。
-
-既往 Ubuntu 24.04 / CameraSDK 2.2.4 / X5 v1.13.21 曾实测约 30 fps 视频与约 500 Hz IMU，本轮离线验证不构成新的实机验收。启动码流可能含缺少初始化头的旧 P 帧，外部解码器可能报告 PPS 警告；原始文件不裁剪，预览跳过数量记在 `startup_units_not_decoded`。其他解码错误仍需核查。
-
-## 7. 可选：使用外部 CameraSDK
-
-仅在需要替换内置 SDK 时使用此流程。将路径改为 Linux x86_64 CameraSDK 根目录；该目录必须包含 `include/camera/camera.h`、`lib/libCameraSDK.so` 和 `bin/jsons/camera_conf_Insta360_X5.json`：
-
-```bash
-camera_sdk_root=/absolute/path/to/CameraSDK-2.2.4-linux-x86_64
-cmake -S . -B build -DCAMERASDK_ROOT="$camera_sdk_root"
-cmake --build build -j4
-ctest --test-dir build --output-on-failure
-readlink -f build/jsons
-```
-
-重新配置会按所选根目录刷新 SDK 头文件、动态库及 `build/jsons` 链接。旧构建目录可能缓存了外部 `CAMERASDK_ROOT`；要恢复仓库内 SDK，清除该缓存项并重新构建：
-
-```bash
-cmake -S . -B build -U CAMERASDK_ROOT
-cmake --build build -j4
-ctest --test-dir build --output-on-failure
-readlink -f build/jsons
-```
-
-恢复后链接目标应为当前仓库的 `third_party/CameraSDK-2.2.4-linux-x86_64/bin/jsons`。外部 SDK、系统或固件组合的实际相机行为需自行验证。
-
-## 8. 常见问题
-
-- **找不到相机或权限不足**：检查数据线、Android 模式、USB 节点读写权限和 `camera.serial`；`lsusb` 可见不代表 SDK 有访问权限。
-- **SDK 库或能力表缺失**：默认检查仓库内 SDK 是否完整；使用外部 SDK 时检查第 7 节列出的文件。确认 `build/jsons` 指向所选 SDK 的 `bin/jsons`，重新配置后再构建。
-- **参数拒绝或读回不一致**：检查 YAML、相机当前状态及固件能力，不绕过读回检查；正式客户端固定 30 fps，不运行额外 FPS 探测。
-- **没有桌面显示环境**：将 `preview.enabled` 设为 false；删除显示环境变量不会自动关闭预览。
-- **无视频/IMU、尺寸偏离、队列/写盘/解码失败**：检查终端错误和 `summary.yaml`；保留已有数据，该次运行按失败处理。客户端不会自动重连。
-- **低延迟路径报告 B 帧**：此路径要求完整 I/P-only H.264，不能忽略该错误继续采集；通用分片/H.265 解码属于独立输入路径。

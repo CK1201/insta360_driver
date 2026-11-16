@@ -1,0 +1,20 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.13"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "insta360-x5"
+version = "0.8.1"
+description = "Native X5 dual-fisheye latest/read NumPy frame interface"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.23"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.scikit-build]
+cmake.args = ["-DBUILD_PYTHON=ON", "-DBUILD_TESTING=OFF"]
+wheel.packages = []
+build-dir = "build-wheel/{wheel_tag}"
+sdist.exclude = ["/build*/**", "/outputs/**", "/.venv*/**", "/dist/**", "/.pytest_cache/**", "**/__pycache__/**"]

@@ -1,0 +1,13 @@
+/build*/
+/outputs/
+/.venv*/
+/dist/
+*.egg-info/
+*.log
+*.pid
+*.o
+*.a
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store

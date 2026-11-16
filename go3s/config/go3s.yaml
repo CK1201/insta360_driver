@@ -1,0 +1,25 @@
+# Camera connects to this phone over Wi-Fi; ADB connects the phone to Ubuntu.
+bridge:
+  adb_serial: ""  # Empty selects the unique authorized API>=28 arm64 Android phone.
+  port: 18765  # Host loopback port; phone endpoint remains 18765.
+camera:
+  serial: ""
+  exposure:
+    mode: manual  # auto | manual | iso_priority | shutter_priority
+    iso: 1000
+    shutter_s: 0.0025 # 快门不得长于 1/fps 秒。
+    ev: 0.0
+  white_balance_kelvin: 4600  # 0 = auto, otherwise request SDK-supported Kelvin.
+stream:
+  imu: true
+preview:
+  enabled: true
+output:
+  save: false
+  directory: ../outputs  # Relative to this YAML file, used only when save=true.
+timing:
+  # 图像估计时间 = 电脑收包时间 - 此延迟（秒）；0 为不补偿。原始时间戳保留。
+  sensor_delay_s: 0.0
+runtime:
+  duration_s: 0.0  # 0 = until q, window close, Ctrl+C, or bridge failure.
+  status_interval_s: 1.0  # Supported closed interval: [0.1, 60] seconds.

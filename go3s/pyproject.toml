@@ -1,0 +1,20 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.13"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "insta360-go3s"
+version = "0.4.1"
+description = "Native GO3S Android bridge latest/read BGR frame interface"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.23"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.scikit-build]
+wheel.packages = ["python/insta360_go3s"]
+cmake.args = ["-DGO3S_BUILD_PYTHON=ON", "-DBUILD_TESTING=OFF"]
+install.components = ["python"]
+sdist.exclude = ["/build*/**", "/outputs/**", "/.local/**", "/android/**", "/.venv*/**", "/dist/**", "/.pytest_cache/**", "**/__pycache__/**"]
